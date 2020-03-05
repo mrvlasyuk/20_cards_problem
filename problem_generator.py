@@ -41,7 +41,6 @@ def get_num_of_sets(cards):
 def find_3rd_card(card_a, card_b):
     return tuple([THIRD_GOOD_PROP[(a, b)] for a, b in zip(card_a, card_b)])
 
-
 def calc_not_allowed_cards(cards):
     return set(find_3rd_card(a, b) for a, b in it.permutations(cards, 2))
     
@@ -106,21 +105,26 @@ def make_html(cards):
     tags[-1][-1] = get_img_tag(QUESTION_ICON)
 
     html = "<html><body> \n"
+    html += "<div style='font-size:110px; color:white'>You have 120 mins left</div><br>"
     html += "<style> body{ background-color: #000000;}</style>\n"
     html += tabulate(tags, tablefmt="html")
     html += "</body></html>"
-    return html
+    return html, cards[-1]
 
 
 if __name__ == "__main__":
     cards = find_20_cards()
     assert get_num_of_sets(cards) == 0
-    print(tabulate(cards))
+    print(tabulate(cards)) 
 
-    html = make_html(cards)
+    html, removed_card = make_html(cards)
+
     with open("index.html", "w") as f:
         f.write(html)
 
+    screenshot_name = "_".join(removed_card) + ".png"
     check_call(['"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --screenshot --window-size=1600,1800 --default-background-color=0 index.html'], shell=True)
+    # check_call([f"mkdir -p pics; mv screenshot.png pics/{screenshot_name}"], shell=True)
+    check_call([f"open screenshot.png"], shell=True)
 
 
