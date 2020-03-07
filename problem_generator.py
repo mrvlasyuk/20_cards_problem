@@ -1,6 +1,7 @@
 import glob
 import random
 import numpy as np
+from PIL import Image
 import itertools as it
 from tabulate import tabulate
 from subprocess import check_call
@@ -79,6 +80,40 @@ def find_20_cards():
                     cards.remove(select_top_and_choice(to_del))
     return cards
 
+
+##############   Nice card shuffle   ##########
+
+def calc_neibors_indexes(x_len, y_len):
+    indexes = np.array(list(it.product(range(x_len), range(y_len))))
+    all_neibors = set()
+    for a in indexes:
+        for b in indexes:
+            if abs(a - b).sum() in (1, 2):
+                neibors = sorted([tuple(a), tuple(b)])
+                all_neibors.add(tuple(neibors))
+    return all_neibors
+
+NEIBORS = calc_neibors_indexes(4, 5)
+
+def shuffle_score(cards):
+    def cards_dist(card_a, card_b):
+        return sum([x == y for (x, y) in zip(card_a, card_b)])
+    cards = np.array(cards).reshape(-1, 5, 4)
+    score = sum(cards_dist(cards[ix_a], cards[ix_b]) for ix_a, ix_b in NEIBORS) 
+    return score
+
+def find_best_shuffle(cards, n_iters):
+    best_shuffle = None
+    best_shuffle_score = 1e9
+    cards = list(cards)
+    for i in range(n_iters):
+        random.shuffle(cards)
+        score = shuffle_score(cards)
+        if score < best_shuffle_score:
+            best_shuffle_score = score
+            best_shuffle = list(cards)
+    return best_shuffle, score
+
 #############  HTML generation  #############
 
 def generate_path(card, base=ICONS):
@@ -105,26 +140,47 @@ def make_html(cards):
     tags[-1][-1] = get_img_tag(QUESTION_ICON)
 
     html = "<html><body> \n"
-    html += "<div style='font-size:110px; color:white'>You have 120 mins left</div><br>"
-    html += "<style> body{ background-color: #000000;}</style>\n"
+    html += "<div style='font-size:110px; color:white'>Prove you're not a robot</div><br><br>"
+    html += "<style> body{ background-color: #010101;}</style>\n"
     html += tabulate(tags, tablefmt="html")
     html += "</body></html>"
     return html, cards[-1]
 
 
+#############  Image processsing  #############
+
+def make_color_transparent(img, rgba):
+    data = np.array(img.convert('RGBA'))
+    mask = True
+    for ix, color in enumerate(rgba):
+        mask = (data[:, :, ix] == color) & mask
+
+    data[mask] = 0
+    return Image.fromarray(data)
+
+def make_image_from_html(in_html, out_file):
+    check_call([f'"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --screenshot --window-size=1800,1800 --default-background-color=0 {in_html}'], shell=True)
+
+    img = Image.open("screenshot.png")
+    img = make_color_transparent(img, (1, 1, 1))
+    img.save("screenshot.png")
+    check_call([f"mkdir -p pics; mv screenshot.png pics/{screenshot_name}"], shell=True)
+    check_call([f"open pics/{screenshot_name}"], shell=True)
+
+
 if __name__ == "__main__":
     cards = find_20_cards()
     assert get_num_of_sets(cards) == 0
-    print(tabulate(cards)) 
+    cards, shuffle_score = find_best_shuffle(cards, 1000)
+    print(f"shuffle_score = {shuffle_score}")
+    print(tabulate(cards))
 
     html, removed_card = make_html(cards)
-
     with open("index.html", "w") as f:
         f.write(html)
 
     screenshot_name = "_".join(removed_card) + ".png"
-    check_call(['"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --screenshot --window-size=1600,1800 --default-background-color=0 index.html'], shell=True)
-    # check_call([f"mkdir -p pics; mv screenshot.png pics/{screenshot_name}"], shell=True)
-    check_call([f"open screenshot.png"], shell=True)
+    make_image_from_html("index.html", screenshot_name)
+    
 
 
