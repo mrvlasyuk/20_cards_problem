@@ -148,7 +148,7 @@ def make_html(cards):
     tags[-1][-1] = get_img_tag(QUESTION_ICON)
 
     html = "<html><body> \n"
-    html += "<div style='font-size:110px; color:white'>Prove you're not a robot</div><br><br>"
+    html += "<div style='font-size:110px; color:black'>Set game problem</div><br><br>"
     html += "<style> body{ background-color: #010101;}</style>\n"
     html += tabulate(tags, tablefmt="html")
     html += "</body></html>"
