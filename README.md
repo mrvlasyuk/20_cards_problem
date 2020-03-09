@@ -1,5 +1,6 @@
 ## Guess the missing card
-![Problem example](/icons/example.png|width=100)
+<img src="/icons/example.png" width="200">
+
 
 ## What is it?
 This is Python generator for 20 cards Set Problem. It generates png images like above.
