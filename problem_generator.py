@@ -3,6 +3,7 @@ import random
 import numpy as np
 from PIL import Image
 import itertools as it
+from tqdm import tqdm
 from tabulate import tabulate
 from subprocess import check_call
 
@@ -25,7 +26,7 @@ for key in all_props:
         for j in range(3):
             THIRD_GOOD_PROP[(props[i], props[j])] = props[(6 - j - i) % 3]
 
-def is_good_comb(cards):
+def is_set_here(cards):
     assert len(cards) == 3
     for q_ix in range(4):
         qualities = [c[q_ix] for c in cards]
@@ -36,7 +37,7 @@ def is_good_comb(cards):
 def get_num_of_sets(cards):
     num_sets = 0
     for cards_3 in it.combinations(cards, 3):
-        num_sets += is_good_comb(cards_3)
+        num_sets += is_set_here(cards_3)
     return num_sets
             
 def find_3rd_card(card_a, card_b):
@@ -64,14 +65,11 @@ def select_top_and_choice(results):
 
 def find_20_cards():
     cards = set()
-
     while len(cards) < 20:
         cards = set()
-        epoch = 0
-        max_len = 0
-        while len(cards) < 20 and epoch < 100:
+        for epoch in range(100):
+            if len(cards) >= 20: break
             to_add = score_cards_to_add(cards)
-            epoch += 1
             if to_add:
                 cards.add(select_top_and_choice(to_add))
             else:
@@ -95,7 +93,7 @@ def calc_neibors_indexes(x_len, y_len):
 
 NEIBORS = calc_neibors_indexes(4, 5)
 
-def shuffle_score(cards):
+def calc_shuffle_score(cards):
     def cards_dist(card_a, card_b):
         return sum([x == y for (x, y) in zip(card_a, card_b)])
     cards = np.array(cards).reshape(-1, 5, 4)
@@ -108,20 +106,32 @@ def find_best_shuffle(cards, n_iters):
     cards = list(cards)
     for i in range(n_iters):
         random.shuffle(cards)
-        score = shuffle_score(cards)
+        score = calc_shuffle_score(cards)
         if score < best_shuffle_score:
             best_shuffle_score = score
             best_shuffle = list(cards)
     return best_shuffle, score
 
+############  We want fills to be more flooded  ##########
+
+def correct_fills(cards):
+    stat = {}
+    for _, _, fill, _ in cards:
+        stat[fill] = stat.get(fill, 0) + 1
+    fills = [x[0] for x in sorted(stat.items(), key=lambda x: x[1])]
+    replace_map = dict(zip(["none", "strips", "flood"], fills))
+    def replace_fill(card):
+        return card[0], card[1], replace_map[card[2]], card[3]
+    return [replace_fill(card) for card in cards]
+
 #############  HTML generation  #############
+
 
 def generate_path(card, base=ICONS):
     color, shape, fill, num = card
     color = dict(red="r", green="g", blue="p")[color]
     shape = dict(square="D", wave="S", circle="P")[shape]
     fill = dict(flood="S", none="O", strips="H")[fill]
-    
     return f"{base}/{num}{fill}{color}{shape}.svg"
 
 def get_img_tag(path):
@@ -133,8 +143,6 @@ def gen_tag_for_card(card):
 
 def make_html(cards):
     cards = list(cards)
-    random.shuffle(cards)
-    # cards = sorted(cards, key=lambda x: x[1])
     tags = np.array([gen_tag_for_card(c) for c in cards])
     tags = tags.reshape(-1, 5)
     tags[-1][-1] = get_img_tag(QUESTION_ICON)
@@ -154,7 +162,6 @@ def make_color_transparent(img, rgba):
     mask = True
     for ix, color in enumerate(rgba):
         mask = (data[:, :, ix] == color) & mask
-
     data[mask] = 0
     return Image.fromarray(data)
 
@@ -168,11 +175,24 @@ def make_image_from_html(in_html, out_file):
     check_call([f"open pics/{screenshot_name}"], shell=True)
 
 
+############  Find most mixed cards  ########
+
+def get_best_20_cards(n_iters):
+    best_cards, best_shuffle_score = None, 1e9
+    for _ in tqdm(range(n_iters)):
+        cards = find_20_cards()
+        assert get_num_of_sets(cards) == 0
+        cards, shuffle_score = find_best_shuffle(cards, 1000)
+        if shuffle_score < best_shuffle_score:
+            best_shuffle_score = shuffle_score
+            best_cards = list(cards)
+    return best_cards, best_shuffle_score
+
 if __name__ == "__main__":
-    cards = find_20_cards()
-    assert get_num_of_sets(cards) == 0
-    cards, shuffle_score = find_best_shuffle(cards, 1000)
+    cards, shuffle_score = get_best_20_cards(20)
     print(f"shuffle_score = {shuffle_score}")
+    cards = correct_fills(cards)
+    assert get_num_of_sets(cards) == 0
     print(tabulate(cards))
 
     html, removed_card = make_html(cards)
